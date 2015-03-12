@@ -13,15 +13,12 @@ import java.util.Vector;
 
 public class VirtualMachine {
 
-    private ArrayList<Vector<Integer> > stackMemoryVar = new ArrayList<>();
-    private ArrayList<Integer> memoryConst;
     private ByteBuffer byteCode;
-    private Byte offsetConstMemory;
-    private Byte offsetMain;
     private  Vector<ArrayList<Byte>> garbageCollector = new Vector<>();
-    Byte carriagePos;
-    Vector<Byte> callStack = new Vector<>();
+    Integer carriagePos;
     Scanner input;
+    Integer stackPointer;
+    Integer varMemoryPointer;
 
     VirtualMachine() {
         input = new Scanner(System.in);
@@ -32,89 +29,103 @@ public class VirtualMachine {
             ++carriagePos;
         }
     }
+
+
+    private Integer getAddress() {
+        byte refer = byteCode.get(carriagePos); //читаем сcылку на ячейку, в которой лежит значение смещения в стеке
+        // для последнего значения переменной
+        //если ссылка принадлежит области храниения констант, то она и является адрессом
+        if (refer < varMemoryPointer) {
+            ++carriagePos;
+            return 0 + refer;
+        }
+        byte offsetInStack = byteCode.get(refer); // чиатем смещение
+        ++carriagePos;
+        return offsetInStack * 5 + stackPointer + 1; //вычисляем абсолютный адресс значения
+    }
+
     void read(String aFileName) throws IOException {
         Path path = Paths.get(aFileName);
         //считали бинарник
         byteCode = ByteBuffer.wrap(Files.readAllBytes(path));
+        stackPointer = byteCode.getInt();
+        carriagePos = Integer.valueOf(byteCode.getShort());
+        varMemoryPointer = Integer.valueOf(byteCode.getShort());
+        //выделяем место для переменных на стеке
+        for (int i = varMemoryPointer; i < carriagePos; ++i) {
+            byteCode.put(i, Integer.valueOf(i - varMemoryPointer).byteValue());
+        }
+
     }
 
 
 
     private void inputVal() throws Exception {
         ++carriagePos;
-        byte address = byteCode.get(carriagePos);
-        incOffset(3);
+        Integer address = getAddress();
+        incOffset(2);
         Integer arg = input.nextInt();
         byteCode.putInt(address, arg);
     }
 
     private void ifLess() {
         ++carriagePos;
-        byte addressFirstArg = byteCode.get(carriagePos);
-        ++carriagePos;
-        byte addressSecondArg = byteCode.get(carriagePos);
+        Integer addressFirstArg = getAddress();
+        Integer addressSecondArg = getAddress();
         if (byteCode.getInt(addressFirstArg) < byteCode.getInt(addressSecondArg)) {
-            incOffset(2);
-        } else {
             ++carriagePos;
-            byte addressForJump = byteCode.get(carriagePos);
-            carriagePos = addressForJump;
+        } else {
+            carriagePos = Integer.valueOf(byteCode.get(carriagePos)); // jump
         }
     }
 
     private void goTo() {
         ++carriagePos;
-        byte addressForJump = byteCode.get(carriagePos);
-        carriagePos = addressForJump;
+        carriagePos = Integer.valueOf(byteCode.get(carriagePos));//jump
     }
 
     private void deduct() {
         ++carriagePos;
-        byte addressOfResult = byteCode.get(carriagePos);
-        ++carriagePos;
-        Integer theFirstArg = byteCode.getInt(byteCode.get(carriagePos));
-        ++carriagePos;
-        Integer theSecondArg = byteCode.getInt(byteCode.get(carriagePos));
+        Integer addressOfResult = getAddress();
+        Integer addressOfFirstArg = getAddress();
+        Integer addressOfSecondArg = getAddress();
+        Integer theFirstArg = byteCode.getInt(addressOfFirstArg);
+        Integer theSecondArg = byteCode.getInt(addressOfSecondArg);
         byteCode.putInt(addressOfResult, theFirstArg - theSecondArg);
-        ++carriagePos;
-
     }
 
     void mov() {
         ++carriagePos;
-        byte addressOfResult = byteCode.get(carriagePos);
+        Integer addressOfResult = getAddress();
+        Integer addressOfArgument = getAddress();
         ++carriagePos;
-        byte addressOfArgument = byteCode.get(carriagePos);
-        incOffset(2);
         Integer argument = byteCode.getInt(addressOfArgument);
         byteCode.putInt(addressOfResult, argument);
     }
 
     void output() {
         ++carriagePos;
-        byte addressOfResult = byteCode.get(carriagePos);
+        Integer addressOfResult = getAddress();
         Integer argument = byteCode.getInt(addressOfResult);
         System.out.println(argument);
-        incOffset(3);
+        carriagePos+=2;
     }
 
     void add() {//ответ, арг, арг
         ++carriagePos;
-        byte addressOfResult = byteCode.get(carriagePos);
-        ++carriagePos;
-        Integer theFirstArg = byteCode.getInt(byteCode.get(carriagePos));
-        ++carriagePos;
-        Integer theSecondArg = byteCode.getInt(byteCode.get(carriagePos));
+        Integer addressOfResult = getAddress();
+        Integer addressOfFirstArg = getAddress();
+        Integer addressOfSecondArg = getAddress();
+        Integer theFirstArg = byteCode.getInt(addressOfFirstArg);
+        Integer theSecondArg = byteCode.getInt(addressOfSecondArg);
         byteCode.putInt(addressOfResult, theFirstArg + theSecondArg);
-        ++carriagePos;
     }
-    
+
     void execute() throws Exception {
-        carriagePos = byteCode.get();
         Integer length = byteCode.array().length;
         while (carriagePos < length) {
             Byte commandCode = byteCode.get(carriagePos);
-            byte[] args = new byte[3];
+        //    System.out.println(commandCode);
             switch (commandCode) {
                 case 1:
                 {
@@ -153,8 +164,6 @@ public class VirtualMachine {
                 }
                 case 8:
                     System.exit(0);
-                default:
-                    incOffset(3);
                     break;
             }
         }

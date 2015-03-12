@@ -4,7 +4,7 @@
 public class Main {
     public static void main(String[] arg) throws Exception {
         VirtualMachine virtualMachine = new VirtualMachine();
-        virtualMachine.read("/home/daria/Загрузки/-Untitled- (15)");
+        virtualMachine.read("/home/daria/Загрузки/-Untitled- (3)");
         virtualMachine.execute();
 
     }
