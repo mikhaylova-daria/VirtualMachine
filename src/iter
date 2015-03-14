@@ -1,6 +1,6 @@
 CONST one 1
 CONST two 2
-CSTRING str "Это "
+CSTRING str "Это программа вычисления n-нного числа Фибоначчи. Введите n:"
 VAR x
 VAR y
 VAR n

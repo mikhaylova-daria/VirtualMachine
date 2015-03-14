@@ -15,7 +15,7 @@ public class VirtualMachine {
     Integer carriagePos;
     Scanner input;
     Integer stackPointer;
-    Integer stackSize;
+    Integer stackSize = 0;
     Integer varMemoryPointer;
 
     VirtualMachine() {
@@ -33,7 +33,7 @@ public class VirtualMachine {
         byte refer = byteCode.get(carriagePos); //читаем сcылку на ячейку, в которой лежит значение смещения в стеке
         // для последнего значения переменной
         //если ссылка принадлежит области храниения констант, то она и является адрессом
-        if (refer < varMemoryPointer) {
+        if (refer >= varMemoryPointer) {
             ++carriagePos;
             return 0 + refer;
         }
@@ -50,10 +50,10 @@ public class VirtualMachine {
         carriagePos = Integer.valueOf(byteCode.getShort());
         varMemoryPointer = Integer.valueOf(byteCode.getShort());
         //выделяем место для переменных на стеке
-        for (int i = varMemoryPointer; i < carriagePos; ++i) {
-            byteCode.put(i, Integer.valueOf(i - varMemoryPointer).byteValue());
+        for (int i = 8; i < varMemoryPointer; ++i) {
+            byteCode.put(i, Integer.valueOf(i - 8).byteValue());// заполняем ячейки карты значениями от 0 до числа переменных
+            stackSize += 5;
         }
-        stackSize = (carriagePos - varMemoryPointer) * 5;
     }
 
     private void callFunction() {
@@ -186,7 +186,6 @@ public class VirtualMachine {
         Integer addressOfArgument = getAddress();
         ++carriagePos;
         Integer argument = byteCode.getInt(addressOfArgument);
-       // System.out.println("address" + addressOfResult + " arg "+ argument);
         byteCode.putInt(addressOfResult, argument);
     }
 
@@ -222,7 +221,7 @@ public class VirtualMachine {
         Integer length = byteCode.array().length;
         while (carriagePos < length) {
             Byte commandCode = byteCode.get(carriagePos);
-          //  System.out.println(commandCode);
+            //System.out.println(commandCode);
             switch (commandCode) {
                 case 1:
                 {

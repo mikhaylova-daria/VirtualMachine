@@ -86,10 +86,16 @@ public class MyAssembler {
         byteBuffer.putInt(0); //stackPointer - временное значение
         byteBuffer.putShort(Integer.valueOf(numberOfByteForConstString + (nameSpaceConst.size() + nameSpaceLabel.size()
                 + 2) * 4 + nameSpaceVar.size()).shortValue());//начало кода
-        byteBuffer.putShort(Integer.valueOf((nameSpaceConst.size() + nameSpaceLabel.size() + 2) * 4
-                + numberOfByteForConstString).shortValue()); //начало декларации переменных
+        byteBuffer.putShort(Integer.valueOf(nameSpaceVar.size() + 8).shortValue()); //начало декларации констант
 
         byte position = 8;
+
+        for (String name: nameSpaceVar) {
+            byteBuffer.put(Integer.valueOf(0).byteValue());
+            mapAddress.put(name, position);
+            ++position;
+        }
+
         for (String name: nameSpaceConst) {
             byteBuffer.putInt(mapConstNameValue.get(name));
             mapAddress.put(name, position);
@@ -116,11 +122,6 @@ public class MyAssembler {
 
         }
 
-        for (String name: nameSpaceVar) {
-            byteBuffer.put(Integer.valueOf(0).byteValue());
-            mapAddress.put(name, position);
-            ++position;
-        }
         in = new Scanner(new File(aFileName));
         Byte command;
         while (in.hasNext()) {
@@ -132,6 +133,7 @@ public class MyAssembler {
                     byteBuffer.put(command);
                     String firstArg = in.next();
                     String secondArg = in.next();
+                  //  System.out.println(secondArg);
                     byteBuffer.put(mapAddress.get(firstArg));
                     byteBuffer.put(mapAddress.get(secondArg));
                     byteBuffer.put(Integer.valueOf(0).byteValue());
