@@ -1,0 +1,23 @@
+CONST one 1
+CONST two 2
+VAR x
+VAR y
+VAR n
+VAR i
+MOV x one
+MOV y one
+INPUT n
+IFLESS n two lab1
+OUTPUT one
+EXIT
+LABEL lab1
+MOV i two
+LABEL lab2
+IFLESS i n lab3
+ADD x x y
+DEDUCT y x y
+ADD i i one
+JUMP lab2
+LABEL lab3
+OUTPUT x
+EXIT

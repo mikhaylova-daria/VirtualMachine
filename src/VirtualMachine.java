@@ -7,14 +7,11 @@ import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
 import java.util.Scanner;
-import java.util.Vector;
 
 public class VirtualMachine {
 
     private ByteBuffer byteCode;
-    private  Vector<ArrayList<Byte>> garbageCollector = new Vector<>();
     Integer carriagePos;
     Scanner input;
     Integer stackPointer;
@@ -160,16 +157,17 @@ public class VirtualMachine {
         ++carriagePos;
         Integer addressFirstArg = getAddress();
         Integer addressSecondArg = getAddress();
+        Integer addressOfLabel = getAddress();
         if (byteCode.getInt(addressFirstArg) < byteCode.getInt(addressSecondArg)) {
-            ++carriagePos;
         } else {
-            carriagePos = Integer.valueOf(byteCode.get(carriagePos)); // jump
+            carriagePos = byteCode.getInt(addressOfLabel); // jump
         }
     }
 
     private void goTo() {
         ++carriagePos;
-        carriagePos = Integer.valueOf(byteCode.get(carriagePos));//jump
+        Integer addressOfLabel = getAddress();//jump
+        carriagePos = byteCode.getInt(addressOfLabel);
     }
 
     private void deduct() {
@@ -213,7 +211,7 @@ public class VirtualMachine {
         Integer length = byteCode.array().length;
         while (carriagePos < length) {
             Byte commandCode = byteCode.get(carriagePos);
-        //    System.out.println(commandCode);
+         //   System.out.println(commandCode);
             switch (commandCode) {
                 case 1:
                 {
@@ -251,8 +249,15 @@ public class VirtualMachine {
                     break;
                 }
                 case 8:
+                {
                     System.exit(0);
                     break;
+                }
+                case 9:
+                {
+                    carriagePos += 4;
+                    break;
+                }
             }
         }
     }
