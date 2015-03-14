@@ -15,12 +15,14 @@ public class MyAssembler {
 
     ArrayList<String> nameSpaceVar = new ArrayList<>();
     ArrayList<String> nameSpaceConst = new ArrayList<>();
+    ArrayList<String> nameSpaceConstString = new ArrayList<>();
     HashMap<String, Integer> mapConstNameValue = new HashMap<>();
     ArrayList<String> nameSpaceLabel = new ArrayList<>();
-    HashMap<String, Integer> mapLabelNameValue = new HashMap<>();
+    HashMap<String, String> mapConstStringNameValue = new HashMap<>();
     HashMap<String, Byte> mapAddress = new HashMap<>();
     Scanner in;
     ByteBuffer byteBuffer;
+
 
     MyAssembler(String aFileName) throws IOException {
         byteBuffer = ByteBuffer.allocate(1024);
@@ -41,6 +43,7 @@ public class MyAssembler {
     void makeByteCode(String aFileName) throws IOException{
         in = new Scanner(new File(aFileName));
         //считали переменные и константы
+        Integer numberOfByteForConstString = 0;
         while (in.hasNext()) {
             String str = in.next();
             switch (str) {
@@ -64,6 +67,16 @@ public class MyAssembler {
                     nameSpaceLabel.add(name);
                     break;
                 }
+                case "CSTRING":
+                {
+                    String name = in.next();
+                    nameSpaceConstString.add(name);
+                    String value = in.findInLine("\".*.\"").split("\"")[1];
+                    //System.out.println(value);
+                    mapConstStringNameValue.put(name, value);
+                    numberOfByteForConstString += (4 + 2 * value.length());
+                    break;
+                }
                 default:
                 {
                     break;
@@ -71,10 +84,10 @@ public class MyAssembler {
             }
         }
         byteBuffer.putInt(0); //stackPointer - временное значение
-        byteBuffer.putShort(Integer.valueOf((nameSpaceConst.size() + nameSpaceLabel.size() + 2) * 4 +
-                nameSpaceVar.size()).shortValue());//начало кода
-        byteBuffer.putShort(Integer.valueOf((nameSpaceConst.size() + nameSpaceLabel.size() + 2) * 4).shortValue());
-                 //начало декларации переменных
+        byteBuffer.putShort(Integer.valueOf(numberOfByteForConstString + (nameSpaceConst.size() + nameSpaceLabel.size()
+                + 2) * 4 + nameSpaceVar.size()).shortValue());//начало кода
+        byteBuffer.putShort(Integer.valueOf((nameSpaceConst.size() + nameSpaceLabel.size() + 2) * 4
+                + numberOfByteForConstString).shortValue()); //начало декларации переменных
 
         byte position = 8;
         for (String name: nameSpaceConst) {
@@ -83,10 +96,24 @@ public class MyAssembler {
             position += 4;
         }
 
+
         for (String label: nameSpaceLabel) {
             mapAddress.put(label, position);
             byteBuffer.putInt(0);
             position += 4;
+        }
+
+
+        for (String constString: nameSpaceConstString) {
+            mapAddress.put(constString, position);
+            String str = mapConstStringNameValue.get(constString);
+            byteBuffer.putInt(str.length());
+            position += 4;
+            for (int i = 0; i < str.length(); ++i) {
+                byteBuffer.putChar(str.charAt(i));
+                position += 2;
+            }
+
         }
 
         for (String name: nameSpaceVar) {
@@ -124,8 +151,15 @@ public class MyAssembler {
                     command = 2;
                     byteBuffer.put(command);
                     String firstArg = in.next();
+                    String flag = in.next();
                     byteBuffer.put(mapAddress.get(firstArg));
-                    byteBuffer.putShort(Integer.valueOf(0).shortValue());
+                    if (flag.equals("s")) {
+                        byteBuffer.put(Integer.valueOf(1).byteValue());
+                    }
+                    if (flag.equals("d")) {
+                        byteBuffer.put(Integer.valueOf(0).byteValue());
+                    }
+                    byteBuffer.put(Integer.valueOf(0).byteValue());
                     break;
                 }
                 case "ADD":

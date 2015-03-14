@@ -186,14 +186,25 @@ public class VirtualMachine {
         Integer addressOfArgument = getAddress();
         ++carriagePos;
         Integer argument = byteCode.getInt(addressOfArgument);
+       // System.out.println("address" + addressOfResult + " arg "+ argument);
         byteCode.putInt(addressOfResult, argument);
     }
 
     void output() {
         ++carriagePos;
         Integer addressOfResult = getAddress();
-        Integer argument = byteCode.getInt(addressOfResult);
-        System.out.println(argument);
+        byte flag = byteCode.get(carriagePos);
+        if (flag == 0) {
+            Integer argument = byteCode.getInt(addressOfResult);
+            System.out.println(argument);
+        } else {
+            Integer lengthOfString = byteCode.getInt(addressOfResult);
+            addressOfResult += 4;
+            for (int i = 0; i < lengthOfString; ++i) {
+                System.out.print(byteCode.getChar(addressOfResult));
+                addressOfResult += 2;
+            }
+        }
         carriagePos+=2;
     }
 
@@ -211,7 +222,7 @@ public class VirtualMachine {
         Integer length = byteCode.array().length;
         while (carriagePos < length) {
             Byte commandCode = byteCode.get(carriagePos);
-         //   System.out.println(commandCode);
+          //  System.out.println(commandCode);
             switch (commandCode) {
                 case 1:
                 {

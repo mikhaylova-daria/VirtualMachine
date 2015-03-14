@@ -1,14 +1,16 @@
 CONST one 1
 CONST two 2
+CSTRING str "Это "
 VAR x
 VAR y
 VAR n
 VAR i
+OUTPUT str s
 MOV x one
 MOV y one
 INPUT n
 IFLESS n two lab1
-OUTPUT one
+OUTPUT one d
 EXIT
 LABEL lab1
 MOV i two
@@ -19,5 +21,5 @@ DEDUCT y x y
 ADD i i one
 JUMP lab2
 LABEL lab3
-OUTPUT x
+OUTPUT x d
 EXIT
