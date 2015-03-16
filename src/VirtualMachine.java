@@ -100,12 +100,12 @@ public class VirtualMachine {
         } else {
             Integer addressOfResult = byteCode.get(carriagePos) + 0;
             Integer lengthOfString = byteCode.getInt(addressOfResult);
-            //System.out.println(lengthOfString);
             addressOfResult += 4;
             for (int i = 0; i < lengthOfString; ++i) {
                 System.out.print(byteCode.getChar(addressOfResult));
                 addressOfResult += 2;
             }
+            System.out.println();
             ++carriagePos;
         }
         carriagePos+=1;
@@ -118,7 +118,6 @@ public class VirtualMachine {
         Integer addressOfSecondArg = getAddress();
         Integer theFirstArg = byteCode.getInt(addressOfFirstArg);
         Integer theSecondArg = byteCode.getInt(addressOfSecondArg);
- //       System.out.println("!"+addressOfResult+" "+ theFirstArg + theSecondArg);
         byteCode.putInt(addressOfResult, theFirstArg + theSecondArg);
     }
 
@@ -137,11 +136,7 @@ public class VirtualMachine {
         byteCode.putInt(0, byteCode.getInt(0) + 4);
     }
 
-    private void ret() {
-        //скопировать ответ в buf
-        // прочитать указатель на пред блок по смещению 1 и выписать его:
-        // прочитать carriagePos по смещению 0
-        //записать ответ в нужное место
+    private void ret() throws Exception {
         ++carriagePos;
         Integer addressOfResult = byteCode.get(carriagePos)*4 + byteCode.getInt(8);
         byteCode.putInt(4, byteCode.getInt(addressOfResult)); //записали в регистр ответ
@@ -153,6 +148,7 @@ public class VirtualMachine {
         Integer addressOfAnswer = byteCode.getInt(8) + offsetOfAnswer * 4;
         byteCode.putInt(addressOfAnswer, byteCode.getInt(4));//из буфера записали результат на стек
         byteCode.putInt(0, byteCode.getInt(0) - 4); //сняли со стека смещение для ответа
+
     }
 
     private void movAbs() {
@@ -187,11 +183,7 @@ public class VirtualMachine {
     void execute() throws Exception {
         Integer length = byteCode.array().length;
         while (carriagePos < length) {
-            Path path = Paths.get("./debug");
-            Files.write(path, byteCode.array());
             Byte commandCode = byteCode.get(carriagePos);
-           // System.out.println(commandCode+ " "+carriagePos) ;
-            //input.next();
             switch (commandCode) {
                 case 1:
                 {

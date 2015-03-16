@@ -3,9 +3,9 @@
  */
 public class Main {
     public static void main(String[] arg) throws Exception {
-        MyAssembler a = new MyAssembler("/home/daria/VirtualMachine/src/sum");
+        MyAssembler a = new MyAssembler("/home/daria/VirtualMachine/src/iter2");
         VirtualMachine virtualMachine = new VirtualMachine();
-        virtualMachine.read("/home/daria/VirtualMachine/src/sum_bytecode");
+        virtualMachine.read("/home/daria/VirtualMachine/src/iter2_bytecode");
         virtualMachine.execute();
     }
 }

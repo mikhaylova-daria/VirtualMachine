@@ -25,25 +25,14 @@ public class MyAssembler {
 
 
     MyAssembler(String aFileName) throws IOException {
-        byteBuffer = ByteBuffer.allocate(1024);
+        byteBuffer = ByteBuffer.allocate(4096);
         makeByteCode(aFileName);
 
     }
 
-    final protected static char[] hexArray = "0123456789ABCDEF".toCharArray();
-    public static String bytesToHex(byte[] bytes) {
-        char[] hexChars = new char[bytes.length * 2];
-        for ( int j = 0; j < bytes.length; j++ ) {
-            int v = bytes[j] & 0xFF;
-            hexChars[j * 2] = hexArray[v >>> 4];
-            hexChars[j * 2 + 1] = hexArray[v & 0x0F];
-        }
-        return new String(hexChars);
-    }
-    void makeByteCode(String aFileName) throws IOException{
+    void makeByteCode(String aFileName) throws IOException {
         in = new Scanner(new File(aFileName));
         //считали переменные и константы
-        Integer numberOfByteForConstString = 0;
         while (in.hasNext()) {
             String str = in.next();
             switch (str) {
@@ -67,9 +56,7 @@ public class MyAssembler {
                     String name = in.next();
                     nameSpaceConstString.add(name);
                     String value = in.findInLine("\".*.\"").split("\"")[1];
-                    //System.out.println(value);
                     mapConstStringNameValue.put(name, value);
-                    numberOfByteForConstString += (4 + 2 * value.length());
                     break;
                 }
                 case "FUNC":
@@ -119,10 +106,7 @@ public class MyAssembler {
             }
 
         }
-
-        Path path2 = Paths.get(aFileName + "__");
-        Files.write(path2, byteBuffer.array());
-
+        in.close();
         in = new Scanner(new File(aFileName));
         Byte command;
         while (in.hasNext()) {
@@ -163,7 +147,6 @@ public class MyAssembler {
                                 if (answer.equals("(")) {
                                     byteBuffer.putInt(0);//НЕТ ВОЗВРАЩАЕМОГО ЗНАЧЕНИЯ
                                 } else {
-                                    //System.out.println(answer+"!!");
                                     byteBuffer.putInt(mapOffset.get(answer)); // куда в вызвыающей функции положить ответ
                                     in.next();
                                 }
@@ -192,7 +175,6 @@ public class MyAssembler {
                                     buf.put(offsetOfArg);
                                     buf.put(Integer.valueOf(0).byteValue());
                                     ++offset;
-                                   // System.out.println(offset + "@@@@@@@@@@@@@@@@");
                                     ++numberOfArg;
                                     str = in.next();
                                 }
@@ -337,7 +319,7 @@ public class MyAssembler {
                 {
                     str = in.next();
                     Byte addressCodeFoo = mapAddress.get(str);//по имени функции получили место,
-                        // где хранится адресс на начало её кода
+                    // где хранится адресс на начало её кода
                     byteBuffer.putInt(addressCodeFoo, byteBuffer.position());// записали туда адресс кода, кооторый сейчас пишем
                     str = in.next();
                     Byte offset = 2;
@@ -375,7 +357,6 @@ public class MyAssembler {
                                 byteBuffer.put(command);
                                 String firstArg = in.next();
                                 String secondArg = in.next();
-                                //  System.out.println(secondArg);
                                 byteBuffer.put(mapOffset.get(firstArg));
                                 byteBuffer.put(mapOffset.get(secondArg));
                                 byteBuffer.put(Integer.valueOf(0).byteValue());
@@ -434,7 +415,6 @@ public class MyAssembler {
                                 byteBuffer.put(command);
                                 for (int i = 0; i < 2; ++i) {
                                     String arg = in.next();
-                                    System.out.println(arg + mapOffset.get(arg));
                                     byteBuffer.put(mapOffset.get(arg));
                                 }
                                 String nameOfLabel;
@@ -478,7 +458,6 @@ public class MyAssembler {
                                 if (answer.equals("(")) {
                                     byteBuffer.putInt(0);//НЕТ ВОЗВРАЩАЕМОГО ЗНАЧЕНИЯ
                                 } else {
-                                    //System.out.println(answer+"!!");
                                     byteBuffer.putInt(mapOffset.get(answer)); // куда в вызвыающей функции положить ответ
                                     in.next();
                                 }
@@ -493,8 +472,10 @@ public class MyAssembler {
                                 str = in.next();
                                 ByteBuffer buf = ByteBuffer.allocate(256);
                                 Integer numberOfArg = 0;
+                                offset = Integer.valueOf(mapOffset.size() + 2).byteValue();
                                 ++offset;//учли, что после переменных вызывающий функции на стеке лежат три вспомогательных инта
                                 ++offset;
+                                Byte adress = offset;
                                 ++offset;
                                 while (!str.equals(")")) {
                                     command = 10;
@@ -523,7 +504,7 @@ public class MyAssembler {
                                 command = 12;
                                 byteBuffer.put(command);
                                 byteBuffer.put(Integer.valueOf(8).byteValue());
-                                byteBuffer.put(Integer.valueOf(offset - numberOfArg - 1).byteValue());//смещение в стеке относительно относительно начала блока вызывающей функции, по которому должен лежать
+                                byteBuffer.put(Integer.valueOf(adress).byteValue());//смещение в стеке относительно относительно начала блока вызывающей функции, по которому должен лежать
 
                                 //выкладываем код для записи в стек аргументов
                                 for (byte i = 0; i < buf.position(); ++i) {
@@ -574,6 +555,7 @@ public class MyAssembler {
         byteBuffer.putInt(8, byteBuffer.position()); //stackPointerOfCurrentFunc
         byteBuffer.putInt(4, 0); //место для ответа, возвращаемого функцией
         byteBuffer.putInt(0, byteBuffer.position());//указатель на top стека
+        in.close();
         Path path = Paths.get(aFileName + "_bytecode");
         Files.write(path, byteBuffer.array());
     }

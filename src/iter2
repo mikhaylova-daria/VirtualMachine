@@ -1,16 +1,15 @@
 CONST one 1
 CONST two 2
 CSTRING str "Это программа вычисления n-нного числа Фибоначчи. Введите n:"
-MAIN x y n i one two :
-OUTPUT s str
+
+FUNC FIB ( n ) i x y one two :
 MOV x one
 MOV y one
-INPUT n
 IFLESS n two lab1
-OUTPUT d one
+MOV x one
 JUMP ex
 LABEL lab1
-MOV i two
+MOV i one
 LABEL lab2
 IFLESS i n lab3
 ADD x x y
@@ -18,6 +17,12 @@ DEDUCT y x y
 ADD i i one
 JUMP lab2
 LABEL lab3
-OUTPUT d x
 LABEL ex
+RETURN x
+
+MAIN m answer one two :
+OUTPUT s str
+INPUT m
+CALL FIB answer ( m )
+OUTPUT d answer
 EXIT
