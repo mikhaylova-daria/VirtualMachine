@@ -1,0 +1,19 @@
+CONST one 1
+CONST two 2
+CONST con 24
+
+FUNC SUM ( x y )  z con :
+ADD x x y
+IFLESS x con lab
+CALL SUM x ( x y )
+LABEL lab
+RETURN x
+
+MAIN  a b c one two :
+INPUT a
+INPUT b
+ADD a a two
+CALL SUM c ( a b )
+OUTPUT d c
+EXIT
+

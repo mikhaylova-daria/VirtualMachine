@@ -14,9 +14,6 @@ public class VirtualMachine {
     private ByteBuffer byteCode;
     Integer carriagePos;
     Scanner input;
-    Integer stackPointer;
-    Integer stackSize = 0;
-    Integer varMemoryPointer;
 
     VirtualMachine() {
         input = new Scanner(System.in);
@@ -30,120 +27,23 @@ public class VirtualMachine {
 
 
     private Integer getAddress() {
-        byte refer = byteCode.get(carriagePos); //читаем сcылку на ячейку, в которой лежит значение смещения в стеке
-        // для последнего значения переменной
-        //если ссылка принадлежит области храниения констант, то она и является адрессом
-        if (refer >= varMemoryPointer) {
-            ++carriagePos;
-            return 0 + refer;
-        }
-        byte offsetInStack = byteCode.get(refer); // чиатем смещение
+        byte refer = byteCode.get(carriagePos);
         ++carriagePos;
-        return offsetInStack * 5 + stackPointer + 1; //вычисляем абсолютный адресс значения
+        return byteCode.getInt(8) + refer * 4;
+    }
+
+    private  Integer getLabel() {
+        byte refer = byteCode.get(carriagePos);
+        ++carriagePos;
+        return 0 + refer;
     }
 
     void read(String aFileName) throws IOException {
         Path path = Paths.get(aFileName);
         //считали бинарник
         byteCode = ByteBuffer.wrap(Files.readAllBytes(path));
-        stackPointer = byteCode.getInt();
-        carriagePos = Integer.valueOf(byteCode.getShort());
-        varMemoryPointer = Integer.valueOf(byteCode.getShort());
-        //выделяем место для переменных на стеке
-        for (int i = 8; i < varMemoryPointer; ++i) {
-            byteCode.put(i, Integer.valueOf(i - 8).byteValue());// заполняем ячейки карты значениями от 0 до числа переменных
-            stackSize += 5;
-        }
+        carriagePos = byteCode.getInt(12);
     }
-
-    private void callFunction() {
-        ++carriagePos;
-        Integer addressOfNumberOfArgument = getAddress();
-        Integer numberOfArgument = byteCode.getInt(addressOfNumberOfArgument);
-        byte addressOfReturnValue = byteCode.get(carriagePos);
-        ++carriagePos;
-        byteCode.put(stackSize + stackPointer, addressOfReturnValue); //адресс возвращаемого значения
-        stackSize += 1;
-        byteCode.putInt(stackSize + stackPointer, carriagePos + numberOfArgument + 2); //адресс возврата
-        stackSize += 4;
-        for (int i = 0; i < numberOfArgument - 1; ++i) {
-            Integer addressOfArgument = getAddress(); //аргументы
-            Integer argument = byteCode.getInt(addressOfArgument);
-            byteCode.putInt(stackSize + stackPointer + 1, argument);
-            stackSize += 5;
-        }
-        Integer addressOfFunction = getAddress();
-        carriagePos = byteCode.getInt(addressOfFunction);//jump
-        byteCode.put(stackSize + stackPointer, Integer.valueOf(0).byteValue());//
-        ++stackSize;
-        byteCode.putInt(stackSize + stackPointer, numberOfArgument); //число аргументов
-        stackSize += 4;
-//        byteCode.put(stackSize + stackPointer, Integer.valueOf(0).byteValue());//
-//        ++stackSize;
-//        byteCode.putInt(stackSize + stackPointer, carriagePos); //start point функции
-//        stackSize += 4;
-    }
-//callstack: адрес возвращаемого значения (byte), адрес возврата(int), аргументы - по 5 byte на каждый, 00 byte,
-// число аргументов - int , byte 00, int - startPoint текущей функции
-    private void reinit() {
-        Integer currentStartPoint = carriagePos;
-        ++carriagePos;
-        byte offsetOfCode = byteCode.get(carriagePos);
-        ++carriagePos;
-        //обрабатываем аргументы
-        Integer numberOfArgument = byteCode.getInt(stackSize + stackPointer - 9);
-        for (byte i = 0; i < numberOfArgument; ++i) {
-            byte lastAddress = byteCode.get(carriagePos);
-            byteCode.put(stackPointer + stackSize - (i+2) * 5, lastAddress); // сохраняем рядом с новым значением
-            // ссылку на место в стеке предыдущего
-            byteCode.put(carriagePos, Integer.valueOf(stackSize / 5 - (i + 2)).byteValue()); // в рабочие перменые
-            // записываем ссылку на место в стеке актуальных значений
-        }
-        for (int i= numberOfArgument; i < offsetOfCode; ++i) {
-            byte lastAddress = byteCode.get(carriagePos);
-            byteCode.put(stackPointer + stackSize, lastAddress); // сохраняем рядом с новым значением
-            // ссылку на место в стеке предыдущего
-            ++stackSize;
-            byteCode.put(carriagePos, Integer.valueOf(stackSize / 5).byteValue()); // в рабочие перменые
-            // записываем ссылку на место в стеке актуальных значений
-            stackSize += 4;//выделили место на стеке для новой переменной
-        }
-        byteCode.put(stackSize + stackPointer, Integer.valueOf(0).byteValue());//
-        ++stackSize;
-        byteCode.putInt(stackSize + stackPointer, currentStartPoint); //startPoint данной функции
-        stackSize += 4;
-
-    }
-
-    private void returnFunc() {
-        ++carriagePos;
-        Integer addressOfResult = getAddress();
-        Integer result = byteCode.getInt(addressOfResult);
-        carriagePos = byteCode.getInt(stackPointer + stackSize - 4);//вернулись в начало функции, чтобы освободить память
-        byteCode.putInt(stackPointer + stackSize - 4, 0);//сняли со стека startPoint
-        stackSize -= 5;
-        ++carriagePos;
-        byte offsetOfCode = byteCode.get(carriagePos);
-        ++carriagePos;
-        for (int i = 0; i < offsetOfCode; ++i) {
-            byte lastAddress = byteCode.get(stackPointer + stackSize - 5);
-            byteCode.putInt(stackPointer + stackSize - 4, 0);//снимаем со стека перемнную
-            byteCode.put(stackPointer + stackSize - 5, Integer.valueOf(0).byteValue());//снимаем со стека lastAdress
-            stackSize -= 5;
-            byteCode.put(carriagePos, lastAddress); //разместили в ячейки, соответствующей переменной, ссылку на актуальное значение в стеке
-        }
-        carriagePos = byteCode.getInt(stackPointer + stackSize - 4);//вернули управление в исходную функцию
-        byteCode.putInt(stackPointer + stackSize - 4, 0);//сняли со стека точку возврата
-        stackSize -= 4;
-        int buf = carriagePos;
-        carriagePos = stackPointer + stackSize - 1;
-        Integer addressOfReturnValue = getAddress();
-        byteCode.putInt(addressOfReturnValue, result);//записали результат
-        byteCode.putInt(stackPointer + stackSize - 1, 0);//сняли со стека возвращаемое значение
-        stackSize -= 1;
-        carriagePos = buf;//вернули управление в исходную функцию
-    }
-
 
     private void inputVal() throws Exception {
         ++carriagePos;
@@ -157,7 +57,7 @@ public class VirtualMachine {
         ++carriagePos;
         Integer addressFirstArg = getAddress();
         Integer addressSecondArg = getAddress();
-        Integer addressOfLabel = getAddress();
+        Integer addressOfLabel = getLabel();
         if (byteCode.getInt(addressFirstArg) < byteCode.getInt(addressSecondArg)) {
         } else {
             carriagePos = byteCode.getInt(addressOfLabel); // jump
@@ -166,7 +66,7 @@ public class VirtualMachine {
 
     private void goTo() {
         ++carriagePos;
-        Integer addressOfLabel = getAddress();//jump
+        Integer addressOfLabel = getLabel();//jump
         carriagePos = byteCode.getInt(addressOfLabel);
     }
 
@@ -191,20 +91,24 @@ public class VirtualMachine {
 
     void output() {
         ++carriagePos;
-        Integer addressOfResult = getAddress();
         byte flag = byteCode.get(carriagePos);
+        ++carriagePos;
         if (flag == 0) {
+            Integer addressOfResult = getAddress();
             Integer argument = byteCode.getInt(addressOfResult);
             System.out.println(argument);
         } else {
+            Integer addressOfResult = byteCode.get(carriagePos) + 0;
             Integer lengthOfString = byteCode.getInt(addressOfResult);
+            //System.out.println(lengthOfString);
             addressOfResult += 4;
             for (int i = 0; i < lengthOfString; ++i) {
                 System.out.print(byteCode.getChar(addressOfResult));
                 addressOfResult += 2;
             }
+            ++carriagePos;
         }
-        carriagePos+=2;
+        carriagePos+=1;
     }
 
     void add() {//ответ, арг, арг
@@ -214,14 +118,80 @@ public class VirtualMachine {
         Integer addressOfSecondArg = getAddress();
         Integer theFirstArg = byteCode.getInt(addressOfFirstArg);
         Integer theSecondArg = byteCode.getInt(addressOfSecondArg);
+ //       System.out.println("!"+addressOfResult+" "+ theFirstArg + theSecondArg);
         byteCode.putInt(addressOfResult, theFirstArg + theSecondArg);
+    }
+
+    private void push() throws  Exception {
+        ++carriagePos;
+        Byte offset = byteCode.get(carriagePos);
+        Integer stackTopPointer = byteCode.getInt(0);
+        if (offset == 0) {
+            byteCode.putInt(stackTopPointer, 0);
+            ++carriagePos;
+        } else {
+            Integer arg = byteCode.getInt(offset);
+            byteCode.putInt(stackTopPointer, arg);
+            ++carriagePos;
+        }
+        byteCode.putInt(0, byteCode.getInt(0) + 4);
+    }
+
+    private void ret() {
+        //скопировать ответ в buf
+        // прочитать указатель на пред блок по смещению 1 и выписать его:
+        // прочитать carriagePos по смещению 0
+        //записать ответ в нужное место
+        ++carriagePos;
+        Integer addressOfResult = byteCode.get(carriagePos)*4 + byteCode.getInt(8);
+        byteCode.putInt(4, byteCode.getInt(addressOfResult)); //записали в регистр ответ
+        carriagePos = byteCode.getInt(byteCode.getInt(8)); //вернули управление в вызывающую функцию
+        byteCode.putInt(0, byteCode.getInt(8));//свернули стек
+        Integer addressOfPreviousBlock = byteCode.getInt(byteCode.getInt(8) + 4);
+        byteCode.putInt(8, addressOfPreviousBlock); //установили актуальное значение начала блока
+        Integer offsetOfAnswer = byteCode.getInt(byteCode.getInt(0) - 4); // в конце стека лежало смещение на место для ответа
+        Integer addressOfAnswer = byteCode.getInt(8) + offsetOfAnswer * 4;
+        byteCode.putInt(addressOfAnswer, byteCode.getInt(4));//из буфера записали результат на стек
+        byteCode.putInt(0, byteCode.getInt(0) - 4); //сняли со стека смещение для ответа
+    }
+
+    private void movAbs() {
+        ++carriagePos;
+        Byte addressOfFirstArg = byteCode.get(carriagePos);
+        ++carriagePos;
+        Byte addressOfSecondArg = byteCode.get(carriagePos);
+        byteCode.putInt(addressOfFirstArg, byteCode.getInt(addressOfSecondArg));
+        ++carriagePos;
+    }
+
+    private void putAbs() {
+        ++carriagePos;
+        Byte addressOfArg = byteCode.get(carriagePos);
+        ++carriagePos;
+        Integer addressOfStackPos = byteCode.get(carriagePos) * 4 + byteCode.getInt(Integer.valueOf(8).byteValue());
+        ++carriagePos;
+        byteCode.putInt(addressOfStackPos, byteCode.getInt(addressOfArg));
+    }
+
+    private void pushConst() {
+        ++carriagePos;
+        Integer arg = byteCode.getInt(carriagePos);
+        for (int i = 0; i < 4; ++i) {
+            ++carriagePos;
+        }
+        byteCode.putInt(byteCode.getInt(0), arg);
+        byteCode.putInt(0, byteCode.getInt(0) + 4);
+
     }
 
     void execute() throws Exception {
         Integer length = byteCode.array().length;
         while (carriagePos < length) {
+            Path path = Paths.get("./debug");
+            Files.write(path, byteCode.array());
             Byte commandCode = byteCode.get(carriagePos);
-            //System.out.println(commandCode);
+           // System.out.println(commandCode+ " "+carriagePos) ;
+            //input.next();
             switch (commandCode) {
                 case 1:
                 {
@@ -266,6 +236,35 @@ public class VirtualMachine {
                 case 9:
                 {
                     carriagePos += 4;
+                    break;
+                }
+                case 10:
+                {
+                    push();
+                    break;
+                }
+                case 11:
+                {
+                    movAbs();
+                    break;
+                }
+                case 12: {
+                    putAbs();
+                    break;
+                }
+                case 13: {
+                    pushConst();
+                    break;
+                }
+                case 14:
+                {
+                    ret();
+                    break;
+                }
+                case 15:
+                {
+                    ++carriagePos;
+                    carriagePos = byteCode.getInt(carriagePos);
                     break;
                 }
             }
