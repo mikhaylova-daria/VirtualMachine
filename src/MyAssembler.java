@@ -1,5 +1,5 @@
 import java.io.File;
-import java.io.IOException;
+import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -13,66 +13,78 @@ import java.util.Scanner;
  */
 public class MyAssembler {
 
-    ArrayList<String> nameSpaceConst = new ArrayList<>();
-    ArrayList<String> nameSpaceConstString = new ArrayList<>();
-    ArrayList<String> nameSpaceFunc = new ArrayList<>();
-    HashMap<String, Integer> mapConstNameValue = new HashMap<>();
-    ArrayList<String> nameSpaceLabel = new ArrayList<>();
-    HashMap<String, String> mapConstStringNameValue = new HashMap<>();
-    HashMap<String, Byte> mapAddress = new HashMap<>();
-    Scanner in;
-    ByteBuffer byteBuffer;
+    private ArrayList<String> nameSpaceConst = new ArrayList<>();
+    private ArrayList<String> nameSpaceConstString = new ArrayList<>();
+    private ArrayList<String> nameSpaceFunc = new ArrayList<>();
+    private HashMap<String, Integer> mapConstNameValue = new HashMap<>();
+    private ArrayList<String> nameSpaceLabel = new ArrayList<>();
+    private HashMap<String, String> mapConstStringNameValue = new HashMap<>();
+    private HashMap<String, Byte> mapAddress = new HashMap<>();
+    private Scanner in;
+    private ByteBuffer byteBuffer;
+    private HashMap<String, String> commands;
+    private HashMap<String, String> namespaceProcessing;
+    private String fileName;
+    private Byte offset;
+    private HashMap <String, Byte> mapOffset;
 
 
-    MyAssembler(String aFileName) throws IOException {
+    MyAssembler(String aFileName) throws Exception {
+        fileName = aFileName;
         byteBuffer = ByteBuffer.allocate(4096);
-        makeByteCode(aFileName);
+        commands = new HashMap<>();
+        namespaceProcessing = new HashMap<>();
+        namespaceProcessing.put("CONST", "constVar");
+        namespaceProcessing.put("LABEL", "label");
+        namespaceProcessing.put("CSTRING", "constString");
+        namespaceProcessing.put("FUNC", "funcName");
+        commands.put("CALL", "call");
+        commands.put("MOV", "mov");
+        commands.put("INPUT", "input");
+        commands.put("OUTPUT", "output");
+        commands.put("ADD", "add");
+        commands.put("DEDUCT", "deduct");
+        commands.put("IFLESS", "ifLess");
+        commands.put("JUMP", "jump");
+        commands.put("LABEL", "labelInCode");
+        commands.put("EXIT", "exitCommand");
+        commands.put("RETURN", "returnCommand");
 
     }
 
-    void makeByteCode(String aFileName) throws IOException {
-        in = new Scanner(new File(aFileName));
-        //считали переменные и константы
+
+    void makeByteCode() throws Exception {
+        formationOfConstAndServiceBlock();
+        formationOfCodeBlock();
+        Path path = Paths.get(fileName + "_bytecode");
+        Files.write(path, byteBuffer.array());
+    }
+
+
+    private void formationOfConstAndServiceBlock() throws Exception {
+        in = new Scanner(new File(fileName));
+        //связывание имён функций и констант с ячейкой памяти
         while (in.hasNext()) {
             String str = in.next();
-            switch (str) {
-                case "CONST":
-                {
-                    String name = in.next();
-                    Integer val = in.nextInt();
-                    nameSpaceConst.add(name);
-                    mapConstNameValue.put(name, val);
-                    break;
-                }
-
-                case "LABEL":
-                {
-                    String name = in.next();
-                    nameSpaceLabel.add(name);
-                    break;
-                }
-                case "CSTRING":
-                {
-                    String name = in.next();
-                    nameSpaceConstString.add(name);
-                    String value = in.findInLine("\".*.\"").split("\"")[1];
-                    mapConstStringNameValue.put(name, value);
-                    break;
-                }
-                case "FUNC":
-                    String name = in.next();
-                    nameSpaceFunc.add(name);
-                    break;
-                default:
-                {
-                    break;
-                }
+            if (namespaceProcessing.containsKey(str)) {
+                Method currentMethod = this.getClass().getMethod(namespaceProcessing.get(str));
+                currentMethod.invoke(this);
             }
         }
+
+        /*формирование блока служебных ячеек: 0)
+        * 0) указатель на вершину стека (0)
+        * 1) ячейка для общения функций: сюда помещается ответ при свёртывании стека, также используется как буфер (4)
+        * 2) ячейка для указателя на начало блока исполняемой функции в стеке (8)
+        * 3) ячейка для указателя на начало main */
+
+
         byteBuffer.putInt(0);
         byteBuffer.putInt(0);
         byteBuffer.putInt(0);
         byteBuffer.putInt(0);
+
+        //связывание ячеек памяти с именами
         byte position = 4*4;
 
         for (String name: nameSpaceConst) {
@@ -107,7 +119,10 @@ public class MyAssembler {
 
         }
         in.close();
-        in = new Scanner(new File(aFileName));
+    }
+
+    private void formationOfCodeBlock() throws Exception {
+        in = new Scanner(new File(fileName));
         Byte command;
         while (in.hasNext()) {
             String str = in.next();
@@ -117,8 +132,8 @@ public class MyAssembler {
                     byteBuffer.putInt(12, byteBuffer.position());
                     command = 10; //push [ссылка на инт или 0(значит кладём нулевой инт)]
                     str = in.next();
-                    HashMap<String, Byte> mapOffset = new HashMap<>();
-                    Byte offset = 0;
+                    mapOffset = new HashMap<>();
+                    offset = 0;
                     while (!str.equals(":")) {
                         byteBuffer.put(command);
                         mapOffset.put(str, offset);
@@ -131,186 +146,13 @@ public class MyAssembler {
                         }
                         str = in.next();
                     }
-                    boolean flag = true;
-                    while (in.hasNext() && flag) {
+                    offset = 0;
+                    while (in.hasNext()) {
                         str = in.next();
-                        switch (str) {
-                            case "CALL":
-                            {
-                                String name = in.next();
-
-                                Integer addressJump = byteBuffer.getInt(mapAddress.get(name)); // адресс адреса кода вызываемой функции
-                                String answer = in.next();
-
-                                command = 13;//pushConst
-                                byteBuffer.put(command);
-                                if (answer.equals("(")) {
-                                    byteBuffer.putInt(0);//НЕТ ВОЗВРАЩАЕМОГО ЗНАЧЕНИЯ
-                                } else {
-                                    byteBuffer.putInt(mapOffset.get(answer)); // куда в вызвыающей функции положить ответ
-                                    in.next();
-                                }
-
-                                //копируем в буфер точку начала нового блока в стеке(текущий top)
-                                //11 movAbs [абс, абс]
-                                command = 11;
-                                byteBuffer.put(command);
-                                byteBuffer.put(Integer.valueOf(4).byteValue());
-                                byteBuffer.put(Integer.valueOf(0).byteValue());
-                                //Выписываем код выкладывания на стек аргументов в спомогательный буфер:
-                                str = in.next();
-                                ByteBuffer buf = ByteBuffer.allocate(256);
-                                Integer numberOfArg = 0;
-                                ++offset;//учли, что после переменных вызывающий функции на стеке лежат три вспомогательных инта
-                                ++offset;
-                                ++offset;
-                                while (!str.equals(")")) {
-                                    command = 10;
-                                    buf.put(command);
-                                    buf.put(Integer.valueOf(0).byteValue());
-                                    command = 3; // mov
-                                    buf.put(command);
-                                    Byte offsetOfArg = mapOffset.get(str);
-                                    buf.put(offset);
-                                    buf.put(offsetOfArg);
-                                    buf.put(Integer.valueOf(0).byteValue());
-                                    ++offset;
-                                    ++numberOfArg;
-                                    str = in.next();
-                                }
-                                command = 13; //pushConst int
-                                byteBuffer.put(command);
-                                Integer adr = byteBuffer.position();
-                                byteBuffer.putInt(0); // позже напишем сюда точку возврата
-                                command = 13; //pushConst int
-                                byteBuffer.put(command);
-                                byteBuffer.putInt(0); // место для старого смещения
-                                //указатель на предшествующий блок берём из соответствующей ячейки
-                                //putAbs abs stack
-                                command = 12;
-                                byteBuffer.put(command);
-                                byteBuffer.put(Integer.valueOf(8).byteValue());
-                                byteBuffer.put(Integer.valueOf(offset - numberOfArg - 1).byteValue());//смещение в стеке относительно относительно начала блока вызывающей функции, по которому должен лежать
-
-                                //выкладываем код для записи в стек аргументов
-                                for (byte i = 0; i < buf.position(); ++i) {
-                                    byteBuffer.put(buf.get(i));
-                                }
-
-                                //ставим в этой ячейке актуальный указатель (он сейчас в буфере)
-                                //11 mov abs abs
-                                command = 11;
-                                byteBuffer.put(command);
-                                byteBuffer.put(Integer.valueOf(8).byteValue());
-                                byteBuffer.put(Integer.valueOf(4).byteValue());
-                                command = 15;//передаём управление
-                                byteBuffer.put(command);
-                                byteBuffer.putInt(addressJump);
-                                byteBuffer.putInt(adr, byteBuffer.position());
-
-                                break;
-                            }
-                            case "MOV":
-                            {
-                                command = 3;
-                                byteBuffer.put(command);
-                                String firstArg = in.next();
-                                String secondArg = in.next();
-                                byteBuffer.put(mapOffset.get(firstArg));
-                                byteBuffer.put(mapOffset.get(secondArg));
-                                byteBuffer.put(Integer.valueOf(0).byteValue());
-                                break;
-                            }
-                            case "INPUT":
-                            {
-                                command = 1;
-                                byteBuffer.put(command);
-                                String firstArg = in.next();
-                                byteBuffer.put(mapOffset.get(firstArg));
-                                byteBuffer.putShort(Integer.valueOf(0).shortValue());
-                                break;
-                            }
-                            case "OUTPUT":
-                            {
-                                command = 2;
-                                byteBuffer.put(command);
-                                String f = in.next();
-                                if (f.equals("s")) {
-                                    String firstArg = in.next();
-                                    byteBuffer.put(Integer.valueOf(1).byteValue());
-                                    byteBuffer.put(mapAddress.get(firstArg));
-                                }
-                                if (f.equals("d")) {
-                                    String firstArg = in.next();
-                                    byteBuffer.put(Integer.valueOf(0).byteValue());
-                                    byteBuffer.put(mapOffset.get(firstArg));
-                                }
-                                byteBuffer.put(Integer.valueOf(0).byteValue());
-                                break;
-                            }
-                            case "ADD":
-                            {
-                                command = 4;
-                                byteBuffer.put(command);
-                                for (int i = 0; i < 3; ++i) {
-                                    String arg = in.next();
-                                    byteBuffer.put(mapOffset.get(arg));
-                                }
-                                break;
-                            }
-                            case "DEDUCT":
-                            {
-                                command = 5;
-                                byteBuffer.put(command);
-                                for (int i = 0; i < 3; ++i) {
-                                    String arg = in.next();
-                                    byteBuffer.put(mapOffset.get(arg));
-                                }
-                                break;
-                            }
-                            case "IFLESS":
-                            {
-                                command = 7;
-                                byteBuffer.put(command);
-                                for (int i = 0; i < 2; ++i) {
-                                    String arg = in.next();
-                                    byteBuffer.put(mapOffset.get(arg));
-                                }
-                                String nameOfLabel;
-                                nameOfLabel = in.next();
-                                byteBuffer.put(mapAddress.get(nameOfLabel));
-                                break;
-                            }
-                            case "JUMP":
-                            {
-                                command = 6;
-                                byteBuffer.put(command);
-                                String arg = in.next();
-                                byteBuffer.put(mapAddress.get(arg));
-                                break;
-                            }
-                            case "LABEL":
-                            {
-                                byteBuffer.putInt(0);
-                                command = 9;
-                                byteBuffer.put(byteBuffer.position() - 4, command);
-                                String arg = in.next();
-                                byteBuffer.putInt(mapAddress.get(arg), byteBuffer.position()); //записали значение метки
-                                break;
-                            }
-                            case "EXIT":
-                            {
-                                byteBuffer.putInt(0);
-                                command = 8;
-                                byteBuffer.put(byteBuffer.position() - 4, command);
-                                flag = false;
-                                break;
-                            }
-                            default:
-                            {
-                                break;
-                            }
-
+                        if (commands.containsKey(str)) {
+                            Method currentMethod = this.getClass().getMethod(commands.get(str));
+                            currentMethod.invoke(this);
+                            if (str.equals("EXIT")) break;
                         }
                     }
                     break;
@@ -322,8 +164,8 @@ public class MyAssembler {
                     // где хранится адресс на начало её кода
                     byteBuffer.putInt(addressCodeFoo, byteBuffer.position());// записали туда адресс кода, кооторый сейчас пишем
                     str = in.next();
-                    Byte offset = 2;
-                    HashMap<String, Byte> mapOffset = new HashMap<>();
+                    offset = 2;
+                    mapOffset = new HashMap<>();
                     if (str.equals( "(")) { //аргументы записываются до передачи управления данной функции (т.е. они уже записаны)
                         str = in.next();
                         while (!str.equals(")")) {
@@ -347,205 +189,13 @@ public class MyAssembler {
                         }
                         str = in.next();
                     }
-                    boolean flag = true;
-                    while (in.hasNext() && flag) {
+                    while (in.hasNext()) {
                         str = in.next();
-                        switch (str) {
-                            case "MOV":
-                            {
-                                command = 3;
-                                byteBuffer.put(command);
-                                String firstArg = in.next();
-                                String secondArg = in.next();
-                                byteBuffer.put(mapOffset.get(firstArg));
-                                byteBuffer.put(mapOffset.get(secondArg));
-                                byteBuffer.put(Integer.valueOf(0).byteValue());
-                                break;
-                            }
-                            case "INPUT":
-                            {
-                                command = 1;
-                                byteBuffer.put(command);
-                                String firstArg = in.next();
-                                byteBuffer.put(mapOffset.get(firstArg));
-                                byteBuffer.putShort(Integer.valueOf(0).shortValue());
-                                break;
-                            }
-                            case "OUTPUT":
-                            {
-                                command = 2;
-                                byteBuffer.put(command);
-                                String f = in.next();
-                                if (f.equals("s")) {
-                                    String firstArg = in.next();
-                                    byteBuffer.put(Integer.valueOf(1).byteValue());
-                                    byteBuffer.put(mapAddress.get(firstArg));
-                                }
-                                if (f.equals("d")) {
-                                    String firstArg = in.next();
-                                    byteBuffer.put(Integer.valueOf(0).byteValue());
-                                    byteBuffer.put(mapOffset.get(firstArg));
-                                }
-                                byteBuffer.put(Integer.valueOf(0).byteValue());
-                                break;
-                            }
-                            case "ADD":
-                            {
-                                command = 4;
-                                byteBuffer.put(command);
-                                for (int i = 0; i < 3; ++i) {
-                                    String arg = in.next();
-                                    byteBuffer.put(mapOffset.get(arg));
-                                }
-                                break;
-                            }
-                            case "DEDUCT":
-                            {
-                                command = 5;
-                                byteBuffer.put(command);
-                                for (int i = 0; i < 3; ++i) {
-                                    String arg = in.next();
-                                    byteBuffer.put(mapOffset.get(arg));
-                                }
-                                break;
-                            }
-                            case "IFLESS":
-                            {
-                                command = 7;
-                                byteBuffer.put(command);
-                                for (int i = 0; i < 2; ++i) {
-                                    String arg = in.next();
-                                    byteBuffer.put(mapOffset.get(arg));
-                                }
-                                String nameOfLabel;
-                                nameOfLabel = in.next();
-                                byteBuffer.put(mapAddress.get(nameOfLabel));
-                                break;
-                            }
-                            case "JUMP":
-                            {
-                                command = 6;
-                                byteBuffer.put(command);
-                                String arg = in.next();
-                                byteBuffer.put(mapAddress.get(arg));
-                                break;
-                            }
-                            case "LABEL":
-                            {
-                                byteBuffer.putInt(0);
-                                command = 9;
-                                byteBuffer.put(byteBuffer.position() - 4, command);
-                                String arg = in.next();
-                                byteBuffer.putInt(mapAddress.get(arg), byteBuffer.position()); //записали значение метки
-                                break;
-                            }
-                            case "EXIT":
-                            {
-                                byteBuffer.putInt(0);
-                                command = 8;
-                                byteBuffer.put(byteBuffer.position() - 4, command);
-                                break;
-                            }
-                            case "CALL":
-                            {
-                                String name = in.next();
-
-                                Integer addressJump = byteBuffer.getInt(mapAddress.get(name)); // адресс адреса кода вызываемой функции
-                                String answer = in.next();
-
-                                command = 13;//pushConst
-                                byteBuffer.put(command);
-                                if (answer.equals("(")) {
-                                    byteBuffer.putInt(0);//НЕТ ВОЗВРАЩАЕМОГО ЗНАЧЕНИЯ
-                                } else {
-                                    byteBuffer.putInt(mapOffset.get(answer)); // куда в вызвыающей функции положить ответ
-                                    in.next();
-                                }
-
-                                //копируем в буфер точку начала нового блока в стеке(текущий top)
-                                //11 movAbs [абс, абс]
-                                command = 11;
-                                byteBuffer.put(command);
-                                byteBuffer.put(Integer.valueOf(4).byteValue());
-                                byteBuffer.put(Integer.valueOf(0).byteValue());
-                                //Выписываем код выкладывания на стек аргументов в спомогательный буфер:
-                                str = in.next();
-                                ByteBuffer buf = ByteBuffer.allocate(256);
-                                Integer numberOfArg = 0;
-                                offset = Integer.valueOf(mapOffset.size() + 2).byteValue();
-                                ++offset;//учли, что после переменных вызывающий функции на стеке лежат три вспомогательных инта
-                                ++offset;
-                                Byte adress = offset;
-                                ++offset;
-                                while (!str.equals(")")) {
-                                    command = 10;
-                                    buf.put(command);
-                                    buf.put(Integer.valueOf(0).byteValue());
-                                    command = 3; // mov
-                                    buf.put(command);
-                                    Byte offsetOfArg = mapOffset.get(str);
-                                    buf.put(offset);
-                                    buf.put(offsetOfArg);
-                                    buf.put(Integer.valueOf(0).byteValue());
-                                    ++offset;
-                                    // System.out.println(offset + "@@@@@@@@@@@@@@@@");
-                                    ++numberOfArg;
-                                    str = in.next();
-                                }
-                                command = 13; //pushConst int
-                                byteBuffer.put(command);
-                                Integer adr = byteBuffer.position();
-                                byteBuffer.putInt(0); // позже напишем сюда точку возврата
-                                command = 13; //pushConst int
-                                byteBuffer.put(command);
-                                byteBuffer.putInt(0); // место для старого смещения
-                                //указатель на предшествующий блок берём из соответствующей ячейки
-                                //putAbs abs stack
-                                command = 12;
-                                byteBuffer.put(command);
-                                byteBuffer.put(Integer.valueOf(8).byteValue());
-                                byteBuffer.put(Integer.valueOf(adress).byteValue());//смещение в стеке относительно относительно начала блока вызывающей функции, по которому должен лежать
-
-                                //выкладываем код для записи в стек аргументов
-                                for (byte i = 0; i < buf.position(); ++i) {
-                                    byteBuffer.put(buf.get(i));
-                                }
-
-                                //ставим в этой ячейке актуальный указатель (он сейчас в буфере)
-                                //11 mov abs abs
-                                command = 11;
-                                byteBuffer.put(command);
-                                byteBuffer.put(Integer.valueOf(8).byteValue());
-                                byteBuffer.put(Integer.valueOf(4).byteValue());
-                                command = 15;//передаём управление
-                                byteBuffer.put(command);
-                                byteBuffer.putInt(addressJump);
-                                byteBuffer.putInt(adr, byteBuffer.position());
-
-                                break;
-                            }
-                            case "RETURN":
-                            {
-                                command = 14;
-                                byteBuffer.put(command);
-                                String name = in.next();
-                                if (mapOffset.containsKey(name)) {
-                                    byteBuffer.put(mapOffset.get(name));
-                                } else {
-                                    byteBuffer.put(Integer.valueOf(0).byteValue());
-                                }
-                                //скопировать ответ в buf
-                                // прочитать указатель на пред блок по смещению 1 и выписать его:
-                                // прочитать carriagePos по смещению 0
-                                //записать ответ в нужное место
-                                flag = false;
-                                break;
-                            }
-                            default:
-                            {
-                                break;
-                            }
-
+                        if (commands.containsKey(str)) {
+                            offset = 2;
+                            Method currentMethod = this.getClass().getMethod(commands.get(str));
+                            currentMethod.invoke(this);
+                            if (str.equals("RETURN")) break;
                         }
                     }
                     break;
@@ -556,9 +206,200 @@ public class MyAssembler {
         byteBuffer.putInt(4, 0); //место для ответа, возвращаемого функцией
         byteBuffer.putInt(0, byteBuffer.position());//указатель на top стека
         in.close();
-        Path path = Paths.get(aFileName + "_bytecode");
-        Files.write(path, byteBuffer.array());
+
     }
 
 
+
+    public void constVar() {
+        String name = in.next();
+        Integer val = in.nextInt();
+        nameSpaceConst.add(name);
+        mapConstNameValue.put(name, val);
+    }
+
+    public void label() {
+        String name = in.next();
+        nameSpaceLabel.add(name);
+    }
+
+    public void constString() {
+        String name = in.next();
+        nameSpaceConstString.add(name);
+        String value = in.findInLine("\".*.\"").split("\"")[1];
+        mapConstStringNameValue.put(name, value);
+    }
+
+    public void funcName() {
+        String name = in.next();
+        nameSpaceFunc.add(name);
+    }
+
+    public void call() {
+            String nameFoo = in.next();
+            Integer addressJump = byteBuffer.getInt(mapAddress.get(nameFoo)); // адресс адреса кода вызываемой функции
+            String answer = in.next();
+            Byte command = 13;//pushConst
+            byteBuffer.put(command);
+            if (answer.equals("(")) {
+                byteBuffer.putInt(0);//НЕТ ВОЗВРАЩАЕМОГО ЗНАЧЕНИЯ
+            } else {
+                byteBuffer.putInt(mapOffset.get(answer)); // куда в вызвыающей функции положить ответ
+                in.next();
+            }
+
+            //копируем в буфер точку начала нового блока в стеке(текущий top)
+            //11 movAbs [абс, абс]
+            command = 11;
+            byteBuffer.put(command);
+            byteBuffer.put(Integer.valueOf(4).byteValue());
+            byteBuffer.put(Integer.valueOf(0).byteValue());
+            //Выписываем код выкладывания на стек аргументов в спомогательный буфер:
+            String str = in.next();
+            ByteBuffer buf = ByteBuffer.allocate(256);
+        offset =  Integer.valueOf(mapOffset.size() + offset).byteValue();
+                ++offset;//учли, что после переменных вызывающий функции на стеке лежат три вспомогательных инта
+            ++offset;
+            Byte address = offset;
+            ++offset;
+            while (!str.equals(")")) {
+                command = 10;
+                buf.put(command);
+                buf.put(Integer.valueOf(0).byteValue());
+                command = 3; // mov
+                buf.put(command);
+                Byte offsetOfArg = mapOffset.get(str);
+                buf.put(offset);
+                buf.put(offsetOfArg);
+                buf.put(Integer.valueOf(0).byteValue());
+                ++offset;
+                str = in.next();
+            }
+            command = 13; //pushConst int
+            byteBuffer.put(command);
+            Integer adr = byteBuffer.position();
+            byteBuffer.putInt(0); // позже напишем сюда точку возврата
+            command = 13; //pushConst int
+            byteBuffer.put(command);
+            byteBuffer.putInt(0); // место для старого смещения
+            //указатель на предшествующий блок берём из соответствующей ячейки
+            //putAbs abs stack
+            command = 12;
+            byteBuffer.put(command);
+            byteBuffer.put(Integer.valueOf(8).byteValue());
+            byteBuffer.put(Integer.valueOf(address).byteValue());//смещение в стеке относительно относительно начала блока вызывающей функции, по которому должен лежать
+
+            //выкладываем код для записи в стек аргументов
+            for (byte i = 0; i < buf.position(); ++i) {
+                byteBuffer.put(buf.get(i));
+            }
+
+            //ставим в этой ячейке актуальный указатель (он сейчас в буфере)
+            //11 mov abs abs
+            command = 11;
+            byteBuffer.put(command);
+            byteBuffer.put(Integer.valueOf(8).byteValue());
+            byteBuffer.put(Integer.valueOf(4).byteValue());
+            command = 15;//передаём управление
+            byteBuffer.put(command);
+            byteBuffer.putInt(addressJump);
+            byteBuffer.putInt(adr, byteBuffer.position());
+    }
+
+    public void mov() {
+        Byte command = 3;
+        byteBuffer.put(command);
+        String firstArg = in.next();
+        String secondArg = in.next();
+        byteBuffer.put(mapOffset.get(firstArg));
+        byteBuffer.put(mapOffset.get(secondArg));
+        byteBuffer.put(Integer.valueOf(0).byteValue());
+    }
+
+    public void input() {
+        Byte command = 1;
+        byteBuffer.put(command);
+        String firstArg = in.next();
+        byteBuffer.put(mapOffset.get(firstArg));
+        byteBuffer.putShort(Integer.valueOf(0).shortValue());
+    }
+
+    public void output() {
+        Byte command = 2;
+        byteBuffer.put(command);
+        String f = in.next();
+        if (f.equals("s")) {
+            String firstArg = in.next();
+            byteBuffer.put(Integer.valueOf(1).byteValue());
+            byteBuffer.put(mapAddress.get(firstArg));
+        }
+        if (f.equals("d")) {
+            String firstArg = in.next();
+            byteBuffer.put(Integer.valueOf(0).byteValue());
+            byteBuffer.put(mapOffset.get(firstArg));
+        }
+        byteBuffer.put(Integer.valueOf(0).byteValue());
+    }
+
+    public void add() {
+        Byte command = 4;
+        byteBuffer.put(command);
+        for (int i = 0; i < 3; ++i) {
+            String arg = in.next();
+            byteBuffer.put(mapOffset.get(arg));
+        }
+    }
+
+    public void deduct() {
+        Byte command = 5;
+        byteBuffer.put(command);
+        for (int i = 0; i < 3; ++i) {
+            String arg = in.next();
+            byteBuffer.put(mapOffset.get(arg));
+        }
+    }
+
+    public void ifLess() {
+        Byte command = 7;
+        byteBuffer.put(command);
+        for (int i = 0; i < 2; ++i) {
+            String arg = in.next();
+            byteBuffer.put(mapOffset.get(arg));
+        }
+        String nameOfLabel;
+        nameOfLabel = in.next();
+        byteBuffer.put(mapAddress.get(nameOfLabel));
+    }
+
+    public void jump() {
+        Byte command = 6;
+        byteBuffer.put(command);
+        String arg = in.next();
+        byteBuffer.put(mapAddress.get(arg));
+    }
+
+    public void labelInCode() {
+        byteBuffer.putInt(0);
+        Byte command = 9;
+        byteBuffer.put(byteBuffer.position() - 4, command);
+        String arg = in.next();
+        byteBuffer.putInt(mapAddress.get(arg), byteBuffer.position()); //записали значение метки
+    }
+
+    public void exitCommand() {
+        byteBuffer.putInt(0);
+        Byte command = 8;
+        byteBuffer.put(byteBuffer.position() - 4, command);
+    }
+
+    public void returnCommand() {
+        Byte command = 14;
+        byteBuffer.put(command);
+        String name = in.next();
+        if (mapOffset.containsKey(name)) {
+            byteBuffer.put(mapOffset.get(name));
+        } else {
+            byteBuffer.put(Integer.valueOf(0).byteValue());
+        }
+    }
 }
