@@ -3,9 +3,10 @@
  */
 public class Main {
     public static void main(String[] arg) throws Exception {
-        MyAssembler a = new MyAssembler("/home/daria/VirtualMachine/src/iter2");
+        MyAssembler a = new MyAssembler("/home/daria/VirtualMachine/src/recursFib");
+        a.makeByteCode();
         VirtualMachine virtualMachine = new VirtualMachine();
-        virtualMachine.read("/home/daria/VirtualMachine/src/iter2_bytecode");
+        virtualMachine.read("/home/daria/VirtualMachine/src/recursFib_bytecode");
         virtualMachine.execute();
     }
 }

@@ -3,20 +3,71 @@
  */
 
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.HashMap;
 import java.util.Scanner;
 
 public class VirtualMachine {
 
     private ByteBuffer byteCode;
     Integer carriagePos;
-    Scanner input;
+    Scanner in;
+    HashMap<Byte, String> commands = new HashMap<>();
 
     VirtualMachine() {
-        input = new Scanner(System.in);
+        in = new Scanner(System.in);
+        Byte command = 1;
+        commands.put(command, "input");
+        ++command;
+        commands.put(command, "output");
+        ++command;
+        commands.put(command, "mov");
+        ++command;
+        commands.put(command, "add");
+        ++command;
+        commands.put(command, "deduct");
+        ++command;
+        commands.put(command, "goTo");
+        ++command;
+        commands.put(command, "ifLess");
+        ++command;
+        //команда 8 - это exit
+        ++command;
+        commands.put(command, "label");
+        ++command;
+        commands.put(command, "push");
+        ++command;
+        commands.put(command, "movAbs");
+        ++command;
+        commands.put(command, "putAbs");
+        ++command;
+        commands.put(command, "pushConst");
+        ++command;
+        commands.put(command, "ret");
+        ++command;
+        commands.put(command, "transferControl");
+    }
+
+
+    void execute() throws Exception {
+        Byte commandCode = byteCode.get(carriagePos);
+        while (commandCode != 8) {
+            if (commands.containsKey(commandCode)) {
+                Method currentMethod = this.getClass().getMethod(commands.get(commandCode));
+                currentMethod.invoke(this);
+            }
+            commandCode = byteCode.get(carriagePos);
+        }
+    }
+
+    void read(String aFileName) throws IOException {
+        Path path = Paths.get(aFileName);
+        byteCode = ByteBuffer.wrap(Files.readAllBytes(path));
+        carriagePos = byteCode.getInt(12);
     }
 
     private void incOffset(int i) {
@@ -32,28 +83,21 @@ public class VirtualMachine {
         return byteCode.getInt(8) + refer * 4;
     }
 
-    private  Integer getLabel() {
+    private Integer getLabel() {
         byte refer = byteCode.get(carriagePos);
         ++carriagePos;
         return 0 + refer;
     }
 
-    void read(String aFileName) throws IOException {
-        Path path = Paths.get(aFileName);
-        //считали бинарник
-        byteCode = ByteBuffer.wrap(Files.readAllBytes(path));
-        carriagePos = byteCode.getInt(12);
-    }
-
-    private void inputVal() throws Exception {
+    public void input() throws Exception {
         ++carriagePos;
         Integer address = getAddress();
         incOffset(2);
-        Integer arg = input.nextInt();
+        Integer arg = in.nextInt();
         byteCode.putInt(address, arg);
     }
 
-    private void ifLess() {
+    public void ifLess() {
         ++carriagePos;
         Integer addressFirstArg = getAddress();
         Integer addressSecondArg = getAddress();
@@ -64,13 +108,13 @@ public class VirtualMachine {
         }
     }
 
-    private void goTo() {
+    public void goTo() {
         ++carriagePos;
         Integer addressOfLabel = getLabel();//jump
         carriagePos = byteCode.getInt(addressOfLabel);
     }
 
-    private void deduct() {
+    public void deduct() {
         ++carriagePos;
         Integer addressOfResult = getAddress();
         Integer addressOfFirstArg = getAddress();
@@ -80,7 +124,7 @@ public class VirtualMachine {
         byteCode.putInt(addressOfResult, theFirstArg - theSecondArg);
     }
 
-    void mov() {
+    public void mov() {
         ++carriagePos;
         Integer addressOfResult = getAddress();
         Integer addressOfArgument = getAddress();
@@ -89,7 +133,7 @@ public class VirtualMachine {
         byteCode.putInt(addressOfResult, argument);
     }
 
-    void output() {
+    public void output() {
         ++carriagePos;
         byte flag = byteCode.get(carriagePos);
         ++carriagePos;
@@ -111,7 +155,7 @@ public class VirtualMachine {
         carriagePos+=1;
     }
 
-    void add() {//ответ, арг, арг
+    public void add() {//ответ, арг, арг
         ++carriagePos;
         Integer addressOfResult = getAddress();
         Integer addressOfFirstArg = getAddress();
@@ -121,7 +165,7 @@ public class VirtualMachine {
         byteCode.putInt(addressOfResult, theFirstArg + theSecondArg);
     }
 
-    private void push() throws  Exception {
+    public void push() throws  Exception {
         ++carriagePos;
         Byte offset = byteCode.get(carriagePos);
         Integer stackTopPointer = byteCode.getInt(0);
@@ -136,7 +180,7 @@ public class VirtualMachine {
         byteCode.putInt(0, byteCode.getInt(0) + 4);
     }
 
-    private void ret() throws Exception {
+    public void ret() throws Exception {
         ++carriagePos;
         Integer addressOfResult = byteCode.get(carriagePos)*4 + byteCode.getInt(8);
         byteCode.putInt(4, byteCode.getInt(addressOfResult)); //записали в регистр ответ
@@ -151,7 +195,7 @@ public class VirtualMachine {
 
     }
 
-    private void movAbs() {
+    public  void movAbs() {
         ++carriagePos;
         Byte addressOfFirstArg = byteCode.get(carriagePos);
         ++carriagePos;
@@ -160,7 +204,7 @@ public class VirtualMachine {
         ++carriagePos;
     }
 
-    private void putAbs() {
+    public void putAbs() {
         ++carriagePos;
         Byte addressOfArg = byteCode.get(carriagePos);
         ++carriagePos;
@@ -169,7 +213,7 @@ public class VirtualMachine {
         byteCode.putInt(addressOfStackPos, byteCode.getInt(addressOfArg));
     }
 
-    private void pushConst() {
+    public void pushConst() {
         ++carriagePos;
         Integer arg = byteCode.getInt(carriagePos);
         for (int i = 0; i < 4; ++i) {
@@ -180,86 +224,12 @@ public class VirtualMachine {
 
     }
 
-    void execute() throws Exception {
-        Integer length = byteCode.array().length;
-        while (carriagePos < length) {
-            Byte commandCode = byteCode.get(carriagePos);
-            switch (commandCode) {
-                case 1:
-                {
-                    inputVal();
-                    break;
-                }
-                case 2:
-                {
-                    output();
-                    break;
-                }
-                case 3:
-                {
-                    mov();
-                    break;
-                }
-                case 4:
-                {
-                    add();
-                    break;
-                }
-                case 5:
-                {
-                    deduct();
-                    break;
-                }
-                case 6:
-                {
-                    goTo();
-                    break;
-                }
-                case 7:
-                {
-                    ifLess();
-                    break;
-                }
-                case 8:
-                {
-                    System.exit(0);
-                    break;
-                }
-                case 9:
-                {
-                    carriagePos += 4;
-                    break;
-                }
-                case 10:
-                {
-                    push();
-                    break;
-                }
-                case 11:
-                {
-                    movAbs();
-                    break;
-                }
-                case 12: {
-                    putAbs();
-                    break;
-                }
-                case 13: {
-                    pushConst();
-                    break;
-                }
-                case 14:
-                {
-                    ret();
-                    break;
-                }
-                case 15:
-                {
-                    ++carriagePos;
-                    carriagePos = byteCode.getInt(carriagePos);
-                    break;
-                }
-            }
-        }
+    public void transferControl() {
+        ++carriagePos;
+        carriagePos = byteCode.getInt(carriagePos);
+    }
+
+    public void label() {
+        carriagePos += 4;
     }
 }
